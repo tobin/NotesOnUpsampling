@@ -174,7 +174,11 @@ interpolation
 Sample-and-hold is in some sense the simplest, most obvious approach.
  Its disadvantage is that it adds phase equivalent to half a sample delay.
  For example, using sample-and-hold to upsample from 2048 Hz to 64 kHz adds
- a delay of (2/(2048 Hz))=1 ms.
+ a delay of 
+\begin_inset Formula $\frac{1}{2}\cdot(2048\textrm{ Hz})^{-1}\approx244\times10^{-6}$
+\end_inset
+
+ s.
  On the other hand, the general approach of zero-padding followed by interpolati
 on allows a flexible trade-off between phase-loss
 \begin_inset Foot
