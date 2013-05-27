@@ -1,0 +1,803 @@
+#LyX 1.6.7 created this file. For more info see http://www.lyx.org/
+\lyxformat 345
+\begin_document
+\begin_header
+\textclass article
+\begin_preamble
+\usepackage{fullpage}
+\end_preamble
+\use_default_options true
+\language english
+\inputencoding auto
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_amsmath 1
+\use_esint 1
+\cite_engine basic
+\use_bibtopic false
+\paperorientation portrait
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\defskip medskip
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\author "" 
+\author "" 
+\end_header
+
+\begin_body
+
+\begin_layout Title
+LIGO-T1300492: Notes on upsampling in CDS
+\end_layout
+
+\begin_layout Author
+Tobin Fricke
+\end_layout
+
+\begin_layout Section
+Upsampling
+\end_layout
+
+\begin_layout Standard
+While the CDS 
+\begin_inset Quotes eld
+\end_inset
+
+user models
+\begin_inset Quotes erd
+\end_inset
+
+ may run at sample rates of 2048 Hz, 4096 Hz, 16384 Hz, 32768 Hz, or 65536
+ Hz (
+\begin_inset Quotes eld
+\end_inset
+
+64 kHz
+\begin_inset Quotes erd
+\end_inset
+
+), the digital-to-analog converter itself is always run at 65536 Hz.
+ In order to increase the sample rate of the data stream, we must generate
+ the 
+\begin_inset Quotes eld
+\end_inset
+
+missing
+\begin_inset Quotes erd
+\end_inset
+
+ samples.
+ Two approaches
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+It turns out that 
+\begin_inset Quotes eld
+\end_inset
+
+sample and hold
+\begin_inset Quotes erd
+\end_inset
+
+ is just a special case of 
+\begin_inset Quotes eld
+\end_inset
+
+zero padding
+\begin_inset Quotes erd
+\end_inset
+
+ with a particular choice of interpolation filter.
+\end_layout
+
+\end_inset
+
+ that are in use are:
+\end_layout
+
+\begin_layout Enumerate
+\begin_inset Quotes eld
+\end_inset
+
+Sample-and-hold.
+\begin_inset Quotes erd
+\end_inset
+
+ The most recent sample is simply repeated to produce the higher rate signal.
+ For example, after upsampling by a factor of 4, the signal [1, 2, 3, 4]
+ becomes [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4].
+\end_layout
+
+\begin_layout Enumerate
+\begin_inset Quotes eld
+\end_inset
+
+Zero-padding.
+\begin_inset Quotes erd
+\end_inset
+
+ Here we simply insert zeros in order to increase the sample rate.
+ For example, after upsampling by a factor of 4, the signal [1,2,3,4] becomes
+ [1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0 0 0].
+\end_layout
+
+\begin_layout Standard
+After performing the upsampling
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+Of course, on the input side we must also downsample from 65536 Hz to the
+ rate of the user model.
+ CDS currently uses the same filters for both upsampling and down samping.
+ 
+\end_layout
+
+\end_inset
+
+ by one of these two means, we filter the new signal through an anti-image
+ (or, perhaps more properly, 
+\begin_inset Quotes eld
+\end_inset
+
+interpolation
+\begin_inset Quotes erd
+\end_inset
+
+) filter.
+ The job of this filter is to smooth out the signal, ideally removing all
+ spectral content from between the old Nyquist rate and the new Nyquist
+ rate.
+\end_layout
+
+\begin_layout Standard
+Sample-and-hold is in some sense the simplest, most obvious approach.
+ Its disadvantage is that it adds phase equivalent to half a sample delay.
+ For example, using sample-and-hold to upsample from 2048 Hz to 64 kHz adds
+ a delay of (2/(2048 Hz))=1 ms.
+ On the other hand, the general approach of zero-padding followed by interpolati
+on allows a flexible trade-off between phase-loss
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+Phase loss can also be reduced simply by running the model at a faster rate.
+\end_layout
+
+\end_inset
+
+ and production of spurious signals.
+ It has a few surprising features that have caught more than one user off-guard.
+\end_layout
+
+\begin_layout Standard
+CDS currently uses zero padding by default.
+ Sample-and-hold may be chosen instead by putting the option 
+\begin_inset Quotes eld
+\end_inset
+
+
+\family typewriter
+no_zero_pad=1
+\family default
+
+\begin_inset Quotes erd
+\end_inset
+
+ in the Simulink model parameters block.
+\end_layout
+
+\begin_layout Section
+Strange effects
+\end_layout
+
+\begin_layout Standard
+One of the most unexpected effects of the 
+\begin_inset Quotes eld
+\end_inset
+
+zero padding
+\begin_inset Quotes erd
+\end_inset
+
+ approach to interpolation is that a constant output from the user model
+ 
+\emph on
+does not
+\emph default
+ produce a constant output to the DAC.
+\end_layout
+
+\begin_layout Standard
+After zero-padding, any signal with a significantly nonzero mean value will
+ contain potentially severe harmonics of the old sampling rate.
+ It's the job of the interpolation / anti-image filter to get rid of them.
+ I contend that the only way to completely eliminate these unwanted harmonics
+ is to use sample-and-hold.
+\end_layout
+
+\begin_layout Standard
+An example showing the time series and spectra resulting from a 
+\begin_inset Quotes eld
+\end_inset
+
+constant
+\begin_inset Quotes erd
+\end_inset
+
+ output value is shown in figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Example-bad-behavior"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Section
+Filter coefficients
+\end_layout
+
+\begin_layout Standard
+The digital filters in CDS are implemented in second order sections (SOS).
+ A second-order-section implements one or two poles and one or two zeros.
+ Each second-order-section is described by a gain term and a set of coefficients
+, implementing the 
+\begin_inset Formula $z$
+\end_inset
+
+-domain transfer function
+\begin_inset Formula \begin{equation}
+H(z)=g\frac{b_{0}+b_{1}z^{-1}+b_{2}z^{-2}}{a_{0}+a_{1}z^{-1}+a_{2}z^{-2}}\label{eq:sos-tf}\end{equation}
+
+\end_inset
+
+In CDS, the leading coefficients 
+\begin_inset Formula $a_{0}$
+\end_inset
+
+ and 
+\begin_inset Formula $b_{0}$
+\end_inset
+
+ are assumed to be equal to one.
+ For each filter module, we store four coefficients per second order section
+ and one overall gain term for the whole module.
+ Each filter module can contain ten(?) second order sections.
+ The coefficients stored in the Foton file are 
+\begin_inset Formula $\{a_{1},a_{2},b_{1},b_{2}\}$
+\end_inset
+
+.
+ Until recently these coefficients were also used directly in the filter
+ implementation.
+\end_layout
+
+\begin_layout Standard
+Recently we switched to a new filter topology that we call 
+\begin_inset Quotes eld
+\end_inset
+
+biquad
+\begin_inset Quotes erd
+\end_inset
+
+
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+Much to my confusion, the filter topology used is 
+\emph on
+not
+\emph default
+ the filter topology you find when you google for "biquad".
+ For example, the filter topologies on the "Digital biquad filter" Wikipedia
+ entry are 
+\emph on
+not
+\emph default
+ the "biquad" topology we are using.
+ 
+\begin_inset Quotes eld
+\end_inset
+
+Biquad
+\begin_inset Quotes erd
+\end_inset
+
+ is just a synonym for 
+\begin_inset Quotes eld
+\end_inset
+
+second order section,
+\begin_inset Quotes erd
+\end_inset
+
+ indicating that both the numerator and denominator of the transfer function
+ are quadratic (in 
+\begin_inset Formula $z$
+\end_inset
+
+ since we are talking about digital filters).
+ 
+\end_layout
+
+\end_inset
+
+ which is implemented using a set of coefficients called 
+\begin_inset Formula $\{a_{11},a_{12},c_{1},c_{2}\}$
+\end_inset
+
+.
+ This filter topology nominally implements the same digital filter, but
+ in a manner that introduces less numerical noise.
+ The biquad coefficients may be derived from the direct form coefficients
+ via the following mapping (G0900928, page 11):
+\begin_inset Formula \begin{eqnarray*}
+a_{11} & = & -a_{1}-1\\
+a_{12} & = & -a_{2}-a_{1}-1\\
+c_{1} & = & b_{1}-a_{1}\\
+c_{2} & = & b_{2}-a_{2}+b_{1}-a_{1}\end{eqnarray*}
+
+\end_inset
+
+The inverse map is:
+\begin_inset Formula \begin{eqnarray*}
+a_{1} & = & -a_{11}-1\\
+a_{2} & = & a_{11}-a_{12}\\
+b_{1} & = & -a_{11}+c_{1}-1\\
+b_{2} & = & a_{11}-a_{12}-c_{1}+c_{2}\end{eqnarray*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+If biquad filters are enabled, then the coefficients are translated into
+ biquad form as the Foton file is read, in 
+\family typewriter
+drv/fmReadCoeff.c
+\family default
+
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+I suggest moving the coefficient-conversion routine to its own function,
+ both (1) so that it doesn't clutter the Foton-file-parsing code, and (2)
+ so that the digital anti-aliasing/anti-image filters (i.e., 
+\family typewriter
+feCoeffxxx
+\family default
+) can be stored in the C code in one canonical format and converted to the
+ other as needed (i.e.
+ 
+\begin_inset Quotes eld
+\end_inset
+
+don't repeat yourself
+\begin_inset Quotes erd
+\end_inset
+
+).
+ Currently the direct form coefficients and the biquad-form coefficients
+ are stored independently and chosen by 
+\family typewriter
+#ifdefs
+\family default
+.
+ It's not immediately obvious from looking at the C code that they implement
+ the same filter.
+ 
+\end_layout
+
+\end_inset
+
+.
+ However, the upsamping/downsampling filter coefficients must be given verbatim
+ in the C code in the correct format (direct-form or biquad).
+ 
+\end_layout
+
+\begin_layout Section
+Where to find the upsampling/downsampling filters
+\end_layout
+
+\begin_layout Standard
+The coefficients for the interpolation filters are found in 
+\family typewriter
+src/fe/controller.c
+\family default
+, in variables called 
+\family typewriter
+feCoeff2x
+\family default
+, 
+\family typewriter
+feCoeff4x
+\family default
+, 
+\family typewriter
+feCoeff16x
+\family default
+, and 
+\family typewriter
+feCoeff32x
+\family default
+, giving the coefficients used when up- or down-sampling by factors of 2,
+ 4, 16, and 32, respectively.
+ 
+\end_layout
+
+\begin_layout Standard
+For example, here is one set of coefficients found in that file
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+I suggest we add comments to controller.c indicating how these filters were
+ designed, or even perhaps even read them from a Foton file so that the
+ design can be inspected in Foton.
+\end_layout
+
+\end_inset
+
+:
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+/* Coeffs for the 4x downsampling (16K system) filter */ 
+\end_layout
+
+\begin_layout Standard
+
+\family typewriter
+static double __attribute__ ((unused)) feCoeff4x[9] = {0.014805052402446,
+ 0.7166258547451800, -0.0683289874517300, 0.3031629575762000, 0.5171469569032900,
+ 0.6838596423885499, -0.2534855521841101, 1.6838609161411500, 1.7447155374502499};
+ 
+\end_layout
+
+\begin_layout Standard
+The first number in this array is the gain factor for the entire filter.
+ Filter coefficients come next, in groups of four.
+ Here there are coefficients for two second-order-sections.
+ If 
+\family typewriter
+CORE_BIQUAD
+\family default
+ is defined, then each group of four coefficients is interpreted as 
+\family roman
+\series medium
+\shape up
+\size normal
+\emph off
+\bar no
+\noun off
+\color none
+
+\begin_inset Formula $\{a_{11},a_{12},c_{1},c_{2}\}$
+\end_inset
+
+.
+ If not, then they are interpreted as 
+\family default
+\series default
+\shape default
+\size default
+\emph default
+\bar default
+\noun default
+\color inherit
+
+\begin_inset Formula $\{a_{1},a_{2},b_{1},b_{2}\}$
+\end_inset
+
+.
+ This particular sample comes from a region surrounded by 
+\family typewriter
+#if defined(CORE_BIQUAD)
+\family default
+, so these are biquad coefficients.
+\end_layout
+
+\begin_layout Section
+Properties of Sample-and-Hold
+\end_layout
+
+\begin_layout Standard
+It seems intuitive that the sample-and-hold technique would be the only
+ upsampling technique that introduces no ripple.
+ To analyze the effect of sample-and-hold, we can think of sample-and-hold
+ as being implemented by zero-padding followed by a filter that implements
+ the sample repetition.
+ 
+\end_layout
+
+\begin_layout Standard
+For example, to upsample a 2048 Hz signal by 
+\begin_inset Formula $32\times$
+\end_inset
+
+, a finite-impulse-response (FIR) filter consisting of 32 ones (aka a rectangle
+ or boxcar) would do the job.
+ We can learn about most of the properties of sample-and-hold simply by
+ looking at the transfer function of this filter
+\end_layout
+
+\begin_layout Standard
+This FIR filter consists of a rectangle that starts at 
+\begin_inset Formula $\tau=0$
+\end_inset
+
+.
+ The frequency response of a rectangle centered on the origin is the sinc
+ function.
+ So the frequency response of sample-and-hold (a delayed rectangle) is a
+ sinc function combined with a delay of one-half the slower sampling period
+\begin_inset Foot
+status open
+
+\begin_layout Plain Layout
+Plot it in Matlab with 
+\family typewriter
+bode(tf(ones(1,32)/32, 1, 1/65536));
+\end_layout
+
+\end_inset
+
+.
+ It turns out that the nulls of this sinc function are at exactly the harmonics
+ of the lower sampling rate: 2048, 4096, 6144, 8192, 10240 Hz, ...
+ up to the new Nyquist rate.
+\end_layout
+
+\begin_layout Standard
+It appears that any interpolation filter that kills all of these harmonics
+ will end up looking something like 
+\begin_inset Quotes eld
+\end_inset
+
+sample and hold.
+\begin_inset Quotes erd
+\end_inset
+
+ (While the sample-and-hold takes care of the harmonics of the original
+ sample rate, we still need to use an anti-image filter to take care of
+ broadband noise, since the envelope of the sinc function only goes like
+ 
+\begin_inset Formula $\sim1/f$
+\end_inset
+
+.)
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename rect_FIR.pdf
+	width 100col%
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption
+
+\begin_layout Plain Layout
+Transfer function of 
+\begin_inset Quotes eld
+\end_inset
+
+sample and hold
+\begin_inset Quotes erd
+\end_inset
+
+.
+ The old and the new Nyquist rates are indicated with red vertical lines.
+ Figure generated by 
+\family typewriter
+rect_FIR.m.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+The Analog Anti-Aliasing/Anti-Image filter
+\end_layout
+
+\begin_layout Standard
+The job of the digital interpolation / anti-alias / anti-image filter is
+ to remove frequency content between the old and the new Nyquist rates after
+ converting from one sample rate to another.
+ The job of the analog anti-alias / anti-image filter is to remove frequency
+ content above the Nyquist rate of the ADC, i.e.
+ everything above 32 kHz.
+ Additionally, the noise of the analog filter should be less than the noise
+ of the ADC/DAC.
+\end_layout
+
+\begin_layout Standard
+The LIGO analog AA/AI filter is implemented as a third-order low-pass at
+ 10 kHz combined with a twin-T notch at 64 kHz (D070081; also 10-meter logbook
+ page 550).
+\end_layout
+
+\begin_layout Section*
+References
+\end_layout
+
+\begin_layout Itemize
+Matt Evans.
+ 
+\begin_inset Quotes eld
+\end_inset
+
+Digital Filter Noise: Why does the textbook tell us not to use direct form
+ 2?
+\begin_inset Quotes erd
+\end_inset
+
+ 
+\begin_inset Flex URL
+status open
+
+\begin_layout Plain Layout
+
+https://dcc.ligo.org/LIGO-G0900928-v1
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Appendix: Frequency response of a SOS
+\end_layout
+
+\begin_layout Standard
+The transfer function of a second-order-section is given by equation 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:sos-tf"
+
+\end_inset
+
+ in terms of the 
+\begin_inset Formula $z$
+\end_inset
+
+-transform parameter.
+ To plot the frequency response, use the relationships 
+\begin_inset Formula $z=\exp{sT}$
+\end_inset
+
+where 
+\begin_inset Formula $s=i\omega=2\pi if$
+\end_inset
+
+ is the frequency and 
+\begin_inset Formula $T=1/f_{s}$
+\end_inset
+
+ is the time interval between samples.
+ This is implemented in the Matlab function 
+\family typewriter
+sos2freqresp.m
+\family default
+ available from 
+\begin_inset Flex URL
+status collapsed
+
+\begin_layout Plain Layout
+
+https://gist.github.com/tobin/1141120
+\end_layout
+
+\end_inset
+
+ and also the built-in Matlab function 
+\family typewriter
+freqz
+\family default
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename timeseries.png
+	width 100col%
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename spectra.png
+	width 100text%
+
+\end_inset
+
+
+\begin_inset Caption
+
+\begin_layout Plain Layout
+Example time series and spectra showing 100 count DC signal (red) after
+ zero-padding and smoothing with our current digital anti-aliasing filter.
+ The spectra were measured through DAC to ADC loopback.
+ The green trace shows what happens to band-limited noise.
+ 10 meter prototype logbook page 840.
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:Example-bad-behavior"
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document
